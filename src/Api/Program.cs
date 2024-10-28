@@ -19,7 +19,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins("http://localhost:5043") // Your Blazor app URL
+        policy.WithOrigins("http://localhost:5043", "https://karaoke.ngoline.com") // Your Blazor app URL
             .AllowAnyMethod()
             .AllowAnyHeader()
             .WithExposedHeaders("*");

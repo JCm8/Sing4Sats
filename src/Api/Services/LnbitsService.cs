@@ -39,7 +39,7 @@ public class LnbitsService
 
         response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<LnbitsInvoiceResponse>();
+        var result = await response.Content.ReadFromJsonAsync<LnbitsInvoiceResponseDto>();
         return (result.payment_request, result.payment_hash);
     }
 }

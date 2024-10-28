@@ -5,30 +5,31 @@ namespace Player.Pages;
 
 public partial class Home
 {
-    private DotNetObjectReference<Home> objRef;
+    private DotNetObjectReference<Home>? _objRef;
     private readonly HttpClient _httpClient;
-    private bool videoStarted;
-    private bool showNextSingerInfo;
-    private Singer? currentSinger;
-    private Singer? nextSinger;
-    private const string API_BASE_URL = "http://localhost:5255/api";  // Configure this
-    private const string AUTH_PREIMAGE = "admin";  // Configure this - matches the hash in QueueController
-    
+    private bool _videoStarted;
+    private bool _showNextSingerInfo;
+    private Singer? _currentSinger;
+    private Singer? _nextSinger;
+    private CancellationTokenSource _pollCancellation;
+    private const string API_BASE_URL = "http://localhost:5255/api"; // Configure this
+    private const string AUTH_PREIMAGE = "admin"; // Configure this - matches the hash in QueueController
+    private const int POLLING_INTERVAL_MS = 5000; // Poll every 5 seconds
+
     public Home()
     {
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("X-Auth-PreImage", AUTH_PREIMAGE);
+        _pollCancellation = new CancellationTokenSource();
     }
-    
+
     protected override async Task OnInitializedAsync()
     {
-        objRef = DotNetObjectReference.Create(this);
-        
+        _objRef = DotNetObjectReference.Create(this);
         await LoadNextSong(false);
-        
         await JS.InvokeVoidAsync("ScrollingText.init");
     }
-    
+
     private async Task<SongRequestDto?> GetNextSong()
     {
         try
@@ -40,6 +41,37 @@ public partial class Home
         {
             Console.WriteLine($"Error getting next song: {ex.Message}");
             return null;
+        }
+    }
+
+    private async Task PollForSongs()
+    {
+        while (!_pollCancellation.Token.IsCancellationRequested)
+        {
+            try
+            {
+                Console.WriteLine("Trying to get next song in queue...");
+                var nextSong = await GetNextSong();
+                if (nextSong != null && nextSong.SongId != _currentSinger!.SongId)
+                {
+                    // Stop polling once we find a song
+                    await _pollCancellation.CancelAsync();
+                    await LoadNextSong();
+                    return;
+                }
+
+                await Task.Delay(POLLING_INTERVAL_MS, _pollCancellation.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancellation, exit the loop
+                return;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during song polling: {ex.Message}");
+                // Continue polling despite errors
+            }
         }
     }
 
@@ -58,22 +90,25 @@ public partial class Home
 
     private async Task StartVideo()
     {
-        if (!videoStarted)
+        if (!_videoStarted)
         {
-            videoStarted = true;
+            _videoStarted = true;
             StateHasChanged();
-            
+
             // Enter fullscreen mode
             await JS.InvokeVoidAsync("Fullscreen.enterFullscreen");
 
             // Initialize YouTube player
-            await JS.InvokeVoidAsync("YouTubePlayer.initialize", currentSinger.SongId, objRef);
+            await JS.InvokeVoidAsync("YouTubePlayer.initialize", _currentSinger!.YoutubeSongId, _objRef);
 
             // Generate RoboHashes
             await GenerateRoboHashes();
-            
+
             // Initialize the scroller
             await JS.InvokeVoidAsync("ScrollingText.init");
+
+            // Tell the song has started
+            await NotifyPlayStarted(_currentSinger.SongId);
         }
     }
 
@@ -92,11 +127,15 @@ public partial class Home
             if (timeRemaining > 30)
             {
                 await Task.Delay((int)((timeRemaining - 30) * 1000));
-                showNextSingerInfo = true;
+                _showNextSingerInfo = true;
                 StateHasChanged();
-                
+
                 // Generate identicon for next singer
-                await JS.InvokeVoidAsync("IdenticonGenerator.generateIdenticon", "next-singer-identicon", nextSinger.Id.ToString(), 100);
+                await JS.InvokeVoidAsync(
+                    "IdenticonGenerator.generateIdenticon",
+                    "next-singer-identicon",
+                    _nextSinger.Id.ToString(),
+                    100);
             }
         }
         else if (state == 0) // Ended
@@ -105,25 +144,25 @@ public partial class Home
             await LoadNextSong();
         }
     }
-    
+
     private string ExtractVideoId(string youtubeUrl)
     {
         try
         {
             var uri = new Uri(youtubeUrl);
-            
+
             // Handle youtube.com/watch?v= format
             if (uri.Host.Contains("youtube.com"))
             {
                 var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                return query["v"];
+                return query["v"] ?? throw new Exception("There's no video ID on the link");
             }
             // Handle youtu.be/ format
             else if (uri.Host.Contains("youtu.be"))
             {
                 return uri.AbsolutePath.TrimStart('/');
             }
-            
+
             return youtubeUrl; // Return as-is if no parsing needed
         }
         catch
@@ -134,51 +173,73 @@ public partial class Home
 
     private async Task LoadNextSong(bool autoPlay = true)
     {
-        showNextSingerInfo = false;
+        _showNextSingerInfo = false;
         StateHasChanged();
 
-        var nextSong = await GetNextSong();
-        if (nextSong != null)
+        if (_currentSinger != null)
         {
-            currentSinger = new Singer
+            if (_nextSinger != null)
+            {
+                _currentSinger = _nextSinger;
+            }
+        }
+        else
+        {
+            var nextSong = await GetNextSong();
+            if (nextSong == null)
+            {
+                await PollForSongs();
+                return;
+            }
+
+            _currentSinger = new Singer
             {
                 Id = nextSong.UserId,
                 Name = nextSong.Username,
                 SongTitle = nextSong.YoutubeLink,
-                SongId = ExtractVideoId(nextSong.YoutubeLink)
+                YoutubeSongId = ExtractVideoId(nextSong.YoutubeLink),
+                SongId = nextSong.SongId
             };
+        }
 
-            // If there's another song in queue, try to get it for the "next up" display
-            var upcomingSong = await GetNextSong();
-            nextSinger = upcomingSong != null && upcomingSong.SongId != nextSong.SongId ? new Singer
+        // If there's another song in queue, try to get it for the "next up" display
+        var upcomingSong = await GetNextSong();
+        if (upcomingSong == null || upcomingSong.SongId == _currentSinger!.SongId)
+        {
+            _ = PollForSongs();
+        }
+        else
+        {
+            _nextSinger = new Singer
             {
                 Id = upcomingSong.UserId,
                 Name = upcomingSong.Username,
                 SongTitle = upcomingSong.YoutubeLink,
-                SongId = ExtractVideoId(upcomingSong.YoutubeLink)
-            } : null;
-
-            StateHasChanged();
-
-            if (autoPlay)
-            {
-                await JS.InvokeVoidAsync("YouTubePlayer.loadVideoById", currentSinger.SongId);
-                await NotifyPlayStarted(nextSong.SongId);
-            }
-
-            await JS.InvokeVoidAsync("ScrollingText.init");
+                YoutubeSongId = ExtractVideoId(upcomingSong.YoutubeLink),
+                SongId = upcomingSong.SongId
+            };
         }
+
+        StateHasChanged();
+
+        if (autoPlay)
+        {
+            await JS.InvokeVoidAsync("YouTubePlayer.loadVideoById", _currentSinger.YoutubeSongId);
+            await NotifyPlayStarted(_currentSinger.SongId);
+        }
+
+        await JS.InvokeVoidAsync("ScrollingText.init");
     }
-    
+
     private async Task LoadNextSongOld()
     {
         // Reset overlays
-        showNextSingerInfo = false;
+        _showNextSingerInfo = false;
         StateHasChanged();
 
         // Update current and next singer (mock)
-        currentSinger = nextSinger;
-        nextSinger = new Singer
+        _currentSinger = _nextSinger;
+        _nextSinger = new Singer
         {
             Id = Guid.Parse("43a128eb-0ac9-47dd-bf96-ff60d32bd979"),
             Name = "Alice Johnson",
@@ -196,18 +257,20 @@ public partial class Home
     private async Task GenerateRoboHashes()
     {
         // Generate identicon for current singer
-        await JS.InvokeVoidAsync("RoboHashGenerator.generateRoboHash", "current-singer-identicon", currentSinger.Id.ToString(), 100);
+        await JS.InvokeVoidAsync("RoboHashGenerator.generateRoboHash", "current-singer-identicon",
+            _currentSinger.Id.ToString(), 100);
 
         // If next singer info is being displayed, generate identicon
-        if (showNextSingerInfo)
+        if (_showNextSingerInfo)
         {
-            await JS.InvokeVoidAsync("RoboHashGenerator.generateRoboHash", "next-singer-identicon", nextSinger.Id.ToString(), 100);
+            await JS.InvokeVoidAsync("RoboHashGenerator.generateRoboHash", "next-singer-identicon",
+                _nextSinger.Id.ToString(), 100);
         }
     }
 
     public void Dispose()
     {
-        objRef?.Dispose();
+        _objRef?.Dispose();
     }
 
     public class Singer
@@ -215,10 +278,11 @@ public partial class Home
         public Guid Id { get; set; }
         public string Name { get; set; }
         public string SongTitle { get; set; }
-        public string SongId { get; set; }
+        public Guid SongId { get; set; }
+        public string YoutubeSongId { get; set; }
         public string QRCodeUrl { get; set; }
     }
-    
+
     public class SongRequestDto
     {
         public Guid SongId { get; set; }
