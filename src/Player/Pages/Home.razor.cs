@@ -67,7 +67,7 @@ public partial class Home
             await JS.InvokeVoidAsync("Fullscreen.enterFullscreen");
 
             // Initialize YouTube player
-            await JS.InvokeVoidAsync("YouTubePlayer.initialize", "3ynrjCFX_1A", objRef);
+            await JS.InvokeVoidAsync("YouTubePlayer.initialize", currentSinger.SongId, objRef);
 
             // Generate RoboHashes
             await GenerateRoboHashes();
@@ -144,24 +144,25 @@ public partial class Home
             {
                 Id = nextSong.UserId,
                 Name = nextSong.Username,
-                SongTitle = nextSong.YoutubeLink
+                SongTitle = nextSong.YoutubeLink,
+                SongId = ExtractVideoId(nextSong.YoutubeLink)
             };
 
             // If there's another song in queue, try to get it for the "next up" display
             var upcomingSong = await GetNextSong();
-            nextSinger = upcomingSong != null ? new Singer
+            nextSinger = upcomingSong != null && upcomingSong.SongId != nextSong.SongId ? new Singer
             {
                 Id = upcomingSong.UserId,
                 Name = upcomingSong.Username,
-                SongTitle = upcomingSong.YoutubeLink
+                SongTitle = upcomingSong.YoutubeLink,
+                SongId = ExtractVideoId(upcomingSong.YoutubeLink)
             } : null;
 
             StateHasChanged();
 
-            var videoId = ExtractVideoId(nextSong.YoutubeLink);
             if (autoPlay)
             {
-                await JS.InvokeVoidAsync("YouTubePlayer.loadVideoById", videoId);
+                await JS.InvokeVoidAsync("YouTubePlayer.loadVideoById", currentSinger.SongId);
                 await NotifyPlayStarted(nextSong.SongId);
             }
 
@@ -214,6 +215,7 @@ public partial class Home
         public Guid Id { get; set; }
         public string Name { get; set; }
         public string SongTitle { get; set; }
+        public string SongId { get; set; }
         public string QRCodeUrl { get; set; }
     }
     
