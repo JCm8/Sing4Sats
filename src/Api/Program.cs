@@ -11,8 +11,11 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite("Data Source=Sing4Sats.db"));
 
 builder.Services.AddHttpClient();
-builder.Services.AddScoped<LnbitsService>();
 builder.Services.AddScoped<HashService>();
+builder.Services.AddScoped<LnAddressService>();
+builder.Services.AddScoped<LnbitsService>();
+builder.Services.AddScoped<LnHookService>();
+builder.Services.AddScoped<LnUrlService>();
 builder.Services.AddScoped<YoutubeService>();
 
 builder.Services.AddCors(options =>

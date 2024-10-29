@@ -70,7 +70,7 @@ public partial class LnAddressService
         return (parts[0], parts[1]);
     }
 
-    private async Task<LnAddressWellKnownResponseDto> GetLnurlPayEndpointInfo(string lightningAddress)
+    public async Task<LnAddressWellKnownResponseDto> GetLnurlPayEndpointInfo(string lightningAddress)
     {
         if (_endpointCache.TryGetValue(lightningAddress, out var cachedInfo))
             return cachedInfo;
@@ -89,7 +89,7 @@ public partial class LnAddressService
         return endpointInfo;
     }
 
-    private async Task SaveInvoice(string lightningAddress, long amount, string invoice, string comment)
+    private async Task<Guid> SaveInvoice(string lightningAddress, long amount, string invoice, string comment)
     {
         var originalInvoice = new LightningInvoice
         {
@@ -103,9 +103,11 @@ public partial class LnAddressService
         _context.LightningInvoices.Add(originalInvoice);
         await _context.SaveChangesAsync();
         _logger.LogInformation("Invoice retrieved for {lightningAddress}, {amount}", lightningAddress, amount);
+
+        return originalInvoice.Id;
     }
 
-    private async Task UpdateInvoice(Guid id, Guid ourId, long ourInvoice, long ourAmount)
+    private async Task UpdateInvoice(Guid id, string ourId, string ourInvoice, long ourAmount)
     {
         var originalInvoice = _context.LightningInvoices.FirstOrDefault(x => x.Id.Equals(id));
         originalInvoice.OurId = ourId;

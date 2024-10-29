@@ -17,7 +17,7 @@ public class LnHookService
         _logger = logger;
     }
 
-    public async Task<(string invoice, Guid id, long amount)> WrapInvoice(string invoice)
+    public async Task<(string invoice, string id, long amount)> WrapInvoice(string invoice)
     {
         var wrapRequest = new
         {
