@@ -41,7 +41,7 @@ public class SongController : ControllerBase
             request.YoutubeLink;
         
         // Amount in sats for the song request
-        var amount = int.Parse(_configuration["SongRequest:Amount"]);
+        var amount = int.Parse(_configuration["SongRequest:Amount"] ?? throw new Exception("You need to set the ammount on the config file."));
         var description = $"Song request: {finalUrl}";
 
         // Generate LNbits invoice
@@ -53,7 +53,8 @@ public class SongController : ControllerBase
             UserId = request.UserId,
             Invoice = invoice,
             PaymentHash = paymentHash,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            IsAlternativeVideo = isAlternative
         };
 
         _context.SongRequests.Add(songRequest);

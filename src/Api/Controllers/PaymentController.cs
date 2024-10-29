@@ -17,31 +17,31 @@ public class PaymentController : ControllerBase
     {
         _context = context;
         _logger = logger;
-        _walletId = configuration["LNbits:WalletId"];
+        _walletId = configuration["LNbits:WalletId"] ?? throw new Exception("You need to set the walletid in the config file.");
     }
 
     [HttpPost("webhook")]
-    public async Task<IActionResult> HandlePaymentWebhook([FromBody] LnbitsWebhookRequest request)
+    public async Task<IActionResult> HandlePaymentWebhook([FromBody] LnbitsWebhookRequestDto requestDto)
     {
-        if (request.wallet_id != _walletId)
+        if (requestDto.wallet_id != _walletId)
         {
             return Unauthorized();
         }
 
-        if (!request.pending && request.status == "success")
+        if (!requestDto.pending && requestDto.status == "success")
         {
             var songRequest = await _context.SongRequests
-                .FirstOrDefaultAsync(x => x.PaymentHash == request.payment_hash);
+                .FirstOrDefaultAsync(x => x.PaymentHash == requestDto.payment_hash);
 
             if (songRequest != null)
             {
                 songRequest.PaidAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Payment received for song request {songRequest.Id}", songRequest.Id);
+                _logger.LogInformation("Payment received for song requestDto {songRequest.Id}", songRequest.Id);
             }
             else
             {
-                _logger.LogInformation("Song Request not found for payment {request.payment_hash}", request.payment_hash);
+                _logger.LogInformation("Song Request not found for payment {requestDto.payment_hash}", requestDto.payment_hash);
             }
         }
 

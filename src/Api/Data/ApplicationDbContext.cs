@@ -12,6 +12,7 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<SongRequestModel> SongRequests { get; set; }
     public DbSet<UserModel> Users { get; set; }
+    public DbSet<LightningInvoice> LightningInvoices { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,6 +35,10 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<UserModel>()
             .HasIndex(u => u.Username)
+            .IsUnique();
+
+        modelBuilder.Entity<LightningInvoice>()
+            .HasIndex(l => l.Id)
             .IsUnique();
     }
 }

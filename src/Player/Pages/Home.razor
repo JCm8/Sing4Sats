@@ -4,39 +4,39 @@
 <div id="player-container" @onclick="StartVideo">
     <div id="player" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%;"></div>
     
-    @if (!videoStarted)
+    @if (!_videoStarted)
     {
     <div class="play-button">
         <p>Please click anywhere to start the karaoke party.</p>
     </div>
     }
-    @if (videoStarted)
+    @if (_videoStarted)
     {
     <!-- Singer Info Overlay (Top Left) -->
     <div class="overlay top-left square">
         <h1>Now Singing</h1>
         <div id="current-singer-identicon"></div>
-        <p class="singer-name">@currentSinger.Name</p>
+        <p class="singer-name">@_currentSinger.Name</p>
         <div class="scrolling-text">
-            <p class="song-title">"@currentSinger.SongTitle"</p>
+            <p class="song-title">"@_currentSinger.SongTitle"</p>
         </div>
     </div>
 
     <!-- QR Code Overlay (Bottom Right) -->
     <div class="overlay bottom-right qrcode">
-        <img src="@currentSinger.QRCodeUrl" alt="QR Code" width="150" height="150" />
+        <img src="@_currentSinger.QRCodeUrl" alt="QR Code" width="150" height="150" />
     </div>
     }
     
     <!-- Next Singer Info Overlay (Top Right) -->
-    @if (showNextSingerInfo)
+    @if (_showNextSingerInfo)
     {
         <div class="overlay top-right square">
             <h1>Up Next...</h1>
             <div id="next-singer-identicon"></div>
-            <p>@nextSinger.Name</p>
+            <p>@_nextSinger.Name</p>
             <div class="scrolling-text">
-                <p class="song-title">"@nextSinger.SongTitle"</p>
+                <p class="song-title">"@_nextSinger.SongTitle"</p>
             </div>
         </div>
     }
