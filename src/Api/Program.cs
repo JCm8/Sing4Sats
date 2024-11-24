@@ -8,6 +8,11 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.Configure<RouteOptions>(options =>
+{
+    options.LowercaseUrls = true;
+});
+
 builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite("Data Source=Sing4Sats.db"));
 
 builder.Services.AddHttpClient();
